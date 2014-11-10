@@ -1,5 +1,5 @@
 /**
- * Copyright 2009 The European Bioinformatics Institute, and others.
+ * Copyright 2014 BiGCaT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,10 +56,12 @@ public class Interactions implements PathwayExporter {
 	Map<String, String> datanodeIdList;
 	Map<String, String> datanodeDbList;
 	Map<String, String> datanodeTypeList;
+	Map<String, String> datanodeNameList;
 	List<String> complexIdList;
 	List<String> complexIdMap;
 	List<String> complexDbMap;
 	List<String> complexTypeMap;
+	List<String> complexNameMap;
 	/* IDMappers */
 	static IDMapperStack loadedGdbs;
 	List<String> interactions;
@@ -77,33 +79,67 @@ public class Interactions implements PathwayExporter {
 	public static void main(String[] args) throws Exception {
 		String interaction = "";
 		System.out.println("Started");
+		/*
+		 * Read args
+		 */
 		String pathwayDirName = args[0];
 		String dbDirName = args[1];
-		String filename = args[2];
+		String interactionFileName = args[2];
+		// String genesProtsFileName = args[3];
+		// String metabolitesFileName = args[4];
 		Interactions psimi = new Interactions();
 		psimi.loadIdMappers(dbDirName);
-		File outputFile = new File(filename);
-		outputFile.createNewFile();
-		BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile));
 		File pathwayDir = new File(pathwayDirName);
+		/*
+		 * Genes + Proteins
+		 */
+		// File genesProtsFile = new File(genesProtsFileName);
+		// genesProtsFile.createNewFile();
+		// BufferedWriter writerGenesProts = new BufferedWriter(new FileWriter(
+		// genesProtsFileName));
+		// writerGenesProts.write("PathwayName\tName\tID\tNodeType\n");
+		// /*
+		// * Metabolites
+		// */
+		// File metabolitesFile = new File(metabolitesFileName);
+		// metabolitesFile.createNewFile();
+		// BufferedWriter writerMets = new BufferedWriter(new FileWriter(
+		// metabolitesFileName));
+		// writerMets.write("PathwayName\tName\tID\tNodeType\n");
+		/*
+		 * Interactions
+		 */
+		File interactionsFile = new File(interactionFileName);
+		interactionsFile.createNewFile();
+		BufferedWriter writerInters = new BufferedWriter(new FileWriter(
+				interactionsFile));
+		writerInters
+		.write("PathwayName\tSourceName\tSourceID\tSourceNodeType\tStartInteractionType\tTargetName\tTargetID\tTargetNodeType\tEndInteractionType\n");
+
 		for (File file : pathwayDir.listFiles()) {
 			Pathway pathway = new Pathway();
 			pathway.readFromXml(file, true);
+			// psimi.getNodeInfo(pathway,writerGenesProts,writerMets);
 			psimi.getNodeInfo(pathway);
-			writer.write("Source\tNodeType\tTarget\tNodeType\tInteractionType\n");
 			for (PathwayElement pwe : pathway.getDataObjects()) {
 				if (pwe.getObjectType() == ObjectType.LINE) {
-					interaction = psimi.convertInter(pwe);
-					System.out.println(interaction);
-					writer.write(interaction);
+					System.out.println("here");
+					psimi
+					.convertInter(pathway, pwe, writerInters);
+					// System.out.println(interaction);
+					// writerInters.write(interaction);
 				}
 			}
-			psimi.getComplexInfo(pathway);
-			psimi.convertComplexToInteractions(writer);
+			// psimi.getComplexInfo(pathway);
+			// psimi.convertComplexToInteractions(pathway, writerInters);
 
 		}
-		writer.flush();
-		writer.close();
+		// writerGenesProts.flush();
+		// writerGenesProts.close();
+		// writerMets.flush();
+		// writerMets.close();
+		writerInters.flush();
+		writerInters.close();
 		System.out.println("Finished!");
 	}
 
@@ -111,6 +147,7 @@ public class Interactions implements PathwayExporter {
 		datanodeIdList = new HashMap<String, String>();
 		datanodeDbList = new HashMap<String, String>();
 		datanodeTypeList = new HashMap<String, String>();
+		datanodeNameList = new HashMap<String, String>();
 		/*
 		 * Get Data Nodes
 		 */
@@ -118,20 +155,54 @@ public class Interactions implements PathwayExporter {
 			if (node.getObjectType() == ObjectType.DATANODE) {
 				// System.out.println(node.getTextLabel());
 				if (!(node.getElementID().isEmpty() || node.getDataSource() == null)) {
+					datanodeNameList
+					.put(node.getGraphId(), node.getTextLabel());
 					datanodeIdList.put(node.getGraphId(), node.getElementID());
 					datanodeDbList.put(node.getGraphId(), node.getDataSource()
 							.getSystemCode());
 					datanodeTypeList.put(node.getGraphId(),
 							node.getDataNodeType());
+					Xref reftoUse = getPrefferedId(node.getDataNodeType(),
+							node.getElementID(), node.getDataSource()
+							.getSystemCode());
+					// if
+					// (node.getDataNodeType().equalsIgnoreCase("Metabolite")) {
+					// try {
+					// writerMets.write(pwy.getMappInfo().getMapInfoName()
+					// + "\t" + node.getTextLabel() + "\t"
+					// + reftoUse + "\t" + node.getDataNodeType()
+					// + "\n");
+					// } catch (IOException e) {
+					// // TODO Auto-generated catch block
+					// e.printStackTrace();
+					// }
+					// } else {
+					// try {
+					// writerGenesProts.write(pwy.getMappInfo()
+					// .getMapInfoName()
+					// + "\t"
+					// + node.getTextLabel()
+					// + "\t"
+					// + reftoUse
+					// + "\t" + node.getDataNodeType() + "\n");
+					// } catch (IOException e) {
+					// // TODO Auto-generated catch block
+					// e.printStackTrace();
+					// }
+					// }
+
 				}
+
+
 			}
 		}
-
 	}
 
-	private String convertInter(PathwayElement pwe)
+
+	private void convertInter(Pathway pathway, PathwayElement pwe,
+			BufferedWriter writerInters)
 	{
-		String interaction = "";
+		// String interaction = "";
 		/*
 		 * Line is connected to nodes on both sides
 		 */
@@ -149,14 +220,33 @@ public class Interactions implements PathwayExporter {
 						datanodeTypeList.get(endGraphRef),
 						datanodeIdList.get(endGraphRef),
 						datanodeDbList.get(endGraphRef));
-				interaction = sourceReftoUse + "\t"
-						+ datanodeTypeList.get(startGraphRef)
-						+ "\t" + targetReftoUse + "\t"
+				System.out.println("hello"
+						+ pathway.getMappInfo().getMapInfoName()
+						+ "\t" + datanodeNameList.get(startGraphRef) + "\t"
+						+ sourceReftoUse + "\t"
+						+ datanodeTypeList.get(startGraphRef) + "\t"
+						+ pwe.getStartLineType() + "\t"
+						+ datanodeNameList.get(endGraphRef) + "\t"
+						+ targetReftoUse + "\t"
 						+ datanodeTypeList.get(endGraphRef) + "\t"
-						+ pwe.getEndLineType() + "\n";
+						+ pwe.getEndLineType() + "\n");
+				try {
+					writerInters.write(pathway.getMappInfo().getMapInfoName()
+							+ "\t" + datanodeNameList.get(startGraphRef) + "\t"
+							+ sourceReftoUse + "\t"
+							+ datanodeTypeList.get(startGraphRef) + "\t"
+							+ pwe.getStartLineType() + "\t"
+							+ datanodeNameList.get(endGraphRef) + "\t"
+							+ targetReftoUse + "\t"
+							+ datanodeTypeList.get(endGraphRef) + "\t"
+							+ pwe.getEndLineType() + "\n");
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 		}
-		return interaction;
+		// return interaction;
 	}
 
 	private void getComplexInfo(Pathway pwy) {
@@ -191,6 +281,7 @@ public class Interactions implements PathwayExporter {
 						&& pwe.getGroupRef().equalsIgnoreCase(complexId)) {
 					System.out.println("GroupRef = " + pwe.getGroupRef());
 					if (!(pwe.getElementID().isEmpty() || pwe.getDataSource() == null)) {
+						complexTypeMap.add(pwe.getTextLabel());
 						complexTypeMap.add(pwe.getDataNodeType());
 						complexIdMap.add(pwe.getElementID());
 						complexDbMap.add(pwe.getDataSource().getSystemCode());
@@ -201,8 +292,9 @@ public class Interactions implements PathwayExporter {
 		}
 	}
 
-	private void convertComplexToInteractions(BufferedWriter writer)
-			throws IOException {
+	private void convertComplexToInteractions(Pathway pathway,
+			BufferedWriter writer)
+					throws IOException {
 		String interaction = "";
 		for (int i = 0; i < complexTypeMap.size(); i++) {
 			/*
@@ -214,9 +306,11 @@ public class Interactions implements PathwayExporter {
 			for (int j = complexTypeMap.size() - 1; j > 1; j--) {
 				Xref targetReftoUse = getPrefferedId(complexTypeMap.get(j),
 						complexIdMap.get(j), complexDbMap.get(j));
-
-				interaction = sourceReftoUse + "\t" + complexTypeMap.get(i)
-						+ "\t" + targetReftoUse + "\t" + complexTypeMap.get(j)
+				interaction = pathway.getMappInfo().getMapInfoName() + "\t" +
+						complexNameMap.get(i) + "\t" + sourceReftoUse + "\t"
+						+ complexTypeMap.get(i) + "\t" + "Covalent Binding"
+						+ "\t" + complexNameMap.get(j) + "\t" + targetReftoUse
+						+ "\t" + complexTypeMap.get(j)
 						+ "\t" + "Covalent Binding" + "\n";
 				writer.write(interaction);
 			}
@@ -233,7 +327,7 @@ public class Interactions implements PathwayExporter {
 
 		DataSource prefds;
 		if (type.equalsIgnoreCase("Metabolite")) {
-			prefds = DataSource.getBySystemCode("Ce");
+			prefds = DataSource.getBySystemCode("Ch");
 		} else if (type.equalsIgnoreCase("Protein")) {
 			prefds = DataSource.getBySystemCode("S");
 		} else {

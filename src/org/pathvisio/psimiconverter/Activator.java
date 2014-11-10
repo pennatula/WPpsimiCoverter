@@ -28,8 +28,10 @@ public class Activator implements BundleActivator {
 	@Override
 	public void start(BundleContext context) throws Exception {
 
-		PsimiPlugin plugin = new PsimiPlugin();
-		context.registerService(PsimiPlugin.class.getName(), plugin, null);
+		//		PsimiPlugin plugin = new PsimiPlugin();
+		// context.registerService(PsimiPlugin.class.getName(), plugin, null);
+		Interactions plugin = new Interactions();
+		context.registerService(Interactions.class.getName(), plugin, null);
 
 	}
 
