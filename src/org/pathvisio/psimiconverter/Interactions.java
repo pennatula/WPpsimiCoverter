@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -53,6 +54,8 @@ public class Interactions implements PathwayExporter {
 	/* the source contains the organization information */
 	Source source = PsiFactory.createSource("WikiPathways");
 	/* HashMaps to store information of datanodes */
+	Map<String, String> uniquedatanodeList;
+	Set<String> uniqueGOList;
 	Map<String, String> datanodeIdList;
 	Map<String, String> datanodeDbList;
 	Map<String, String> datanodeTypeList;
@@ -85,7 +88,8 @@ public class Interactions implements PathwayExporter {
 		String pathwayDirName = args[0];
 		String dbDirName = args[1];
 		String interactionFileName = args[2];
-		// String genesProtsFileName = args[3];
+		String genesProtsFileName = args[3];
+		String goFileName = args[5];
 		// String metabolitesFileName = args[4];
 		Interactions psimi = new Interactions();
 		psimi.loadIdMappers(dbDirName);
@@ -97,6 +101,12 @@ public class Interactions implements PathwayExporter {
 		// genesProtsFile.createNewFile();
 		// BufferedWriter writerGenesProts = new BufferedWriter(new FileWriter(
 		// genesProtsFileName));
+		/*
+		 * GO Terms
+		 */
+		File GOFile = new File(goFileName);
+		GOFile.createNewFile();
+		BufferedWriter writerGO = new BufferedWriter(new FileWriter(goFileName));
 		// writerGenesProts.write("PathwayName\tName\tID\tNodeType\n");
 		// /*
 		// * Metabolites
@@ -109,38 +119,87 @@ public class Interactions implements PathwayExporter {
 		/*
 		 * Interactions
 		 */
-		File interactionsFile = new File(interactionFileName);
-		interactionsFile.createNewFile();
-		BufferedWriter writerInters = new BufferedWriter(new FileWriter(
-				interactionsFile));
-		writerInters
-		.write("PathwayName\tSourceName\tSourceID\tSourceNodeType\tStartInteractionType\tTargetName\tTargetID\tTargetNodeType\tEndInteractionType\n");
+		// File interactionsFile = new File(interactionFileName);
+		// interactionsFile.createNewFile();
+		// BufferedWriter writerInters = new BufferedWriter(new FileWriter(
+		// interactionsFile));
+		// writerInters
+		// .write("PathwayName\tSourceName\tSourceID\tSourceNodeType\tStartInteractionType\tTargetName\tTargetID\tTargetNodeType\tEndInteractionType\n");
 
-		for (File file : pathwayDir.listFiles()) {
-			Pathway pathway = new Pathway();
-			pathway.readFromXml(file, true);
-			// psimi.getNodeInfo(pathway,writerGenesProts,writerMets);
-			psimi.getNodeInfo(pathway);
-			for (PathwayElement pwe : pathway.getDataObjects()) {
-				if (pwe.getObjectType() == ObjectType.LINE) {
-					System.out.println("here");
-					psimi
-					.convertInter(pathway, pwe, writerInters);
-					// System.out.println(interaction);
-					// writerInters.write(interaction);
-				}
-			}
-			// psimi.getComplexInfo(pathway);
-			// psimi.convertComplexToInteractions(pathway, writerInters);
+		//		for (File file : pathwayDir.listFiles()) {
+		//			Pathway pathway = new Pathway();
+		//			pathway.readFromXml(file, true);
 
-		}
+		// psimi.getNodeInfo(pathway);
+		// for (PathwayElement pwe : pathway.getDataObjects()) {
+		// if (pwe.getObjectType() == ObjectType.LINE) {
+		// System.out.println("here");
+		// psimi
+		// .convertInter(pathway, pwe, writerInters);
+		// // System.out.println(interaction);
+		// // writerInters.write(interaction);
+		// }
+		// }
+		// psimi.getComplexInfo(pathway);
+		// psimi.convertComplexToInteractions(pathway, writerInters);
+		//		}
+		// Map<String, String> gps = psimi.getUniqueGPs(pathwayDir);
+		// for(int i =0; i<gps.size();i++) {
+		// String name = gps.get(i);
+		// String value = gps.get(name);
+		// writerGenesProts.write(name + "\t" + value);
+		// }
+		// writerGenesProts.write(psimi.getUniqueGPs(pathwayDir).toString());
+		writerGO.write(psimi.getUniqueGOTerms(pathwayDir).toString());
+		writerGO.flush();
+		writerGO.close();
 		// writerGenesProts.flush();
 		// writerGenesProts.close();
 		// writerMets.flush();
 		// writerMets.close();
-		writerInters.flush();
-		writerInters.close();
+		// writerInters.flush();
+		// writerInters.close();
 		System.out.println("Finished!");
+	}
+
+
+	private Map<String, String> getUniqueGPs(File pathwayDir)
+			throws ConverterException {
+		uniqueGOList = new HashSet<String>();
+		uniquedatanodeList = new HashMap<String, String>();
+		for (File file : pathwayDir.listFiles()) {
+			Pathway pathway = new Pathway();
+			pathway.readFromXml(file, true);
+
+			/*
+			 * Get Data Nodes
+			 */
+			for (PathwayElement node : pathway.getDataObjects()) {
+				if (node.getObjectType() == ObjectType.DATANODE) {
+					// System.out.println(node.getTextLabel());
+					if (!(node.getElementID().isEmpty() || node.getDataSource() == null)) {
+
+						if (node.getDataNodeType().equalsIgnoreCase("GeneProduct")
+								|| node.getDataNodeType().equalsIgnoreCase(
+										"Protein")) {
+							Xref reftoUse = getPrefferedId(node.getDataNodeType(),
+									node.getElementID(), node.getDataSource()
+									.getSystemCode());
+							if (reftoUse.getDataSource().getSystemCode()
+									.equalsIgnoreCase("En")) {
+								uniquedatanodeList.put(reftoUse.getId(),
+										pathway
+										.getMappInfo()
+										.getMapInfoName());
+							}
+
+						}
+					}
+
+				}
+			}
+		}
+		return uniquedatanodeList;
 	}
 
 	private void getNodeInfo(Pathway pwy) {
@@ -328,9 +387,11 @@ public class Interactions implements PathwayExporter {
 		DataSource prefds;
 		if (type.equalsIgnoreCase("Metabolite")) {
 			prefds = DataSource.getBySystemCode("Ch");
-		} else if (type.equalsIgnoreCase("Protein")) {
-			prefds = DataSource.getBySystemCode("S");
-		} else {
+		}
+		// else if (type.equalsIgnoreCase("Protein")) {
+		// prefds = DataSource.getBySystemCode("S");
+		// }
+		else {
 			prefds = DataSource.getBySystemCode("En");
 		}
 
@@ -349,6 +410,62 @@ public class Interactions implements PathwayExporter {
 			}
 		}
 		return Ref;
+	}
+
+	private Set<String> getUniqueGOTerms(File pathwayDir)
+			throws ConverterException {
+		uniqueGOList = new HashSet<String>();
+		for (File file : pathwayDir.listFiles()) {
+			Pathway pathway = new Pathway();
+			pathway.readFromXml(file, true);
+			/*
+			 * Get Data Nodes
+			 */
+			for (PathwayElement node : pathway.getDataObjects()) {
+				if (node.getObjectType() == ObjectType.DATANODE) {
+					// System.out.println(node.getTextLabel());
+					if (!(node.getElementID().isEmpty() || node.getDataSource() == null)) {
+
+						if (node.getDataNodeType().equalsIgnoreCase("GeneProduct")
+								|| node.getDataNodeType().equalsIgnoreCase(
+										"Protein")) {
+							Xref reftoUse = getPrefferedId(
+									node.getDataNodeType(),
+									node.getElementID(), node.getDataSource()
+									.getSystemCode());
+							if (reftoUse.getDataSource().getSystemCode()
+									.equalsIgnoreCase("En")) {
+								Xref ref = new Xref(reftoUse.getId(),
+										DataSource.getBySystemCode("En"));
+
+								DataSource gods = DataSource.getBySystemCode("T");
+								// Lookup GO terms
+								try {
+									Set<Xref> newRefs = loadedGdbs.mapID(ref, gods);
+									if (!newRefs.isEmpty()) {
+										// System.out.println(newRefs.toArray());
+										Object[] goRefs = newRefs.toArray();
+										for (int i = 0; i < newRefs.size(); i++) {
+											System.out.println(goRefs[i]);
+											uniqueGOList.add(goRefs[i]
+													.toString());
+										}
+									}
+
+								} catch (IDMapperException e) {
+									e.printStackTrace();
+								}
+							}
+
+						}
+					}
+
+				}
+			}
+		}
+
+		return uniqueGOList;
+
 	}
 
 	private void loadIdMappers(String dbDirName) {
